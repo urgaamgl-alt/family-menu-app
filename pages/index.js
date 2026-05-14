@@ -15,13 +15,23 @@ export default function Home() {
   const [weeklyMenu, setWeeklyMenu] = useState({});
   const [selectedRecipeCategory, setSelectedRecipeCategory] = useState('meatDishes');
 
-  // Issue #6 Fix: Support all 5 recipe categories with custom counts
-  const [categoryPreferences, setCategoryPreferences] = useState({
-    meatDishes: 2,
-    vegetableDishes: 1,
-    soupDishes: 1,
-    specialtyDishes: 1,
+  // Separate preferences for breakfast, lunch, and dinner
+  const [breakfastPreferences, setBreakfastPreferences] = useState({
     breakfast: 1
+  });
+
+  const [lunchPreferences, setLunchPreferences] = useState({
+    meatDishes: 1,
+    vegetableDishes: 1,
+    soupDishes: 0,
+    specialtyDishes: 0
+  });
+
+  const [dinnerPreferences, setDinnerPreferences] = useState({
+    meatDishes: 1,
+    vegetableDishes: 1,
+    soupDishes: 0,
+    specialtyDishes: 0
   });
 
   const [showAddFoodForm, setShowAddFoodForm] = useState(false);
@@ -29,7 +39,6 @@ export default function Home() {
   const [newFoodData, setNewFoodData] = useState({ foodCategory: 'vegetables', enName: '', zhName: '' });
   const [newRecipeData, setNewRecipeData] = useState({ enName: '', zhName: '', difficulty: 'Easy', cuisine: 'Chinese', category: 'meatDishes' });
   const [newMemberData, setNewMemberData] = useState({ name: '', avatar: avatarOptions[0], age: 'Adult' });
-  const [memberEditIds, setMemberEditIds] = useState({});
 
   const t = (key) => {
     const langObj = translations[language] || translations['en'];
@@ -47,12 +56,17 @@ export default function Home() {
       setCustomFoods(data.customFoods || {});
       setCustomRecipes(data.customRecipes || {});
       setWeeklyMenu(data.weeklyMenu || {});
-      setCategoryPreferences(data.categoryPreferences || {
-        meatDishes: 2,
+      setLunchPreferences(data.lunchPreferences || {
+        meatDishes: 1,
         vegetableDishes: 1,
-        soupDishes: 1,
-        specialtyDishes: 1,
-        breakfast: 1
+        soupDishes: 0,
+        specialtyDishes: 0
+      });
+      setDinnerPreferences(data.dinnerPreferences || {
+        meatDishes: 1,
+        vegetableDishes: 1,
+        soupDishes: 0,
+        specialtyDishes: 0
       });
     }
   }, []);
@@ -66,10 +80,11 @@ export default function Home() {
       customFoods,
       customRecipes,
       weeklyMenu,
-      categoryPreferences
+      lunchPreferences,
+      dinnerPreferences
     };
     localStorage.setItem('familyMenuDataV3', JSON.stringify(data));
-  }, [familyMembers, foodRatings, recipeRatings, customFoods, customRecipes, weeklyMenu, categoryPreferences]);
+  }, [familyMembers, foodRatings, recipeRatings, customFoods, customRecipes, weeklyMenu, lunchPreferences, dinnerPreferences]);
 
   // ============================================
   // HELPER FUNCTIONS
@@ -100,7 +115,6 @@ export default function Home() {
     return foodRatings[key] || 0;
   };
 
-  // Issue #2 Fix: Helper to check if rating should be highlighted (cumulative)
   const isFoodRatingHighlighted = (memberId, category, foodIndex, ratingLevel) => {
     const currentRating = getFoodRating(memberId, category, foodIndex);
     return currentRating >= ratingLevel;
@@ -116,7 +130,6 @@ export default function Home() {
     return recipeRatings[key] || 0;
   };
 
-  // Issue #2 Fix: Helper to check if rating should be highlighted (cumulative)
   const isRecipeRatingHighlighted = (memberId, recipeId, ratingLevel) => {
     const currentRating = getRecipeRating(memberId, recipeId);
     return currentRating >= ratingLevel;
@@ -182,7 +195,6 @@ export default function Home() {
     setCustomRecipes({ ...customRecipes });
   };
 
-  // Issue #3 Fix: Add function to reassign recipe category
   const changeRecipeCategory = (recipeId, newCategory) => {
     if (customRecipes[recipeId]) {
       customRecipes[recipeId].category = newCategory;
@@ -204,7 +216,6 @@ export default function Home() {
     setFamilyMembers(familyMembers.filter(m => m.id !== memberId));
   };
 
-  // Issue #1 Fix: Use useCallback to stabilize the edit function and prevent keyboard dismissal
   const editFamilyMemberName = useCallback((memberId, newName) => {
     setFamilyMembers(prevMembers =>
       prevMembers.map(m => m.id === memberId ? { ...m, name: newName } : m)
@@ -215,7 +226,6 @@ export default function Home() {
     setFamilyMembers(familyMembers.map(m => m.id === memberId ? { ...m, avatar: newAvatar } : m));
   };
 
-  // Issue #7 Fix: Add export function
   const exportData = () => {
     const data = {
       familyMembers,
@@ -224,7 +234,8 @@ export default function Home() {
       customFoods,
       customRecipes,
       weeklyMenu,
-      categoryPreferences
+      lunchPreferences,
+      dinnerPreferences
     };
     const json = JSON.stringify(data, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
@@ -238,7 +249,6 @@ export default function Home() {
     URL.revokeObjectURL(url);
   };
 
-  // Issue #7 Fix: Add import function
   const importData = () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -255,12 +265,17 @@ export default function Home() {
           setCustomFoods(imported.customFoods || {});
           setCustomRecipes(imported.customRecipes || {});
           setWeeklyMenu(imported.weeklyMenu || {});
-          setCategoryPreferences(imported.categoryPreferences || {
-            meatDishes: 2,
+          setLunchPreferences(imported.lunchPreferences || {
+            meatDishes: 1,
             vegetableDishes: 1,
-            soupDishes: 1,
-            specialtyDishes: 1,
-            breakfast: 1
+            soupDishes: 0,
+            specialtyDishes: 0
+          });
+          setDinnerPreferences(imported.dinnerPreferences || {
+            meatDishes: 1,
+            vegetableDishes: 1,
+            soupDishes: 0,
+            specialtyDishes: 0
           });
           alert('Data imported successfully!');
         } catch (err) {
@@ -273,7 +288,7 @@ export default function Home() {
   };
 
   // ============================================
-  // SMART MENU SUGGESTION ALGORITHM (REWRITTEN)
+  // SMART MENU SUGGESTION ALGORITHM (MULTIPLE DISHES)
   // ============================================
 
   const generateSmartMenu = () => {
@@ -318,14 +333,16 @@ export default function Home() {
       const breakfastRecipes = sortedCategories.breakfast;
       const breakfast = breakfastRecipes.length > 0 ? breakfastRecipes[day % breakfastRecipes.length] : null;
 
-      // For lunch & dinner, collect recipes from all non-breakfast categories based on preferences
-      const lunch = selectMealByPreference(sortedCategories, day, 'lunch');
-      const dinner = selectMealByPreference(sortedCategories, day, 'dinner');
+      // Select multiple dishes for lunch based on lunch preferences
+      const lunch = selectMultipleDishesByPreference(sortedCategories, lunchPreferences, day, 'lunch');
+
+      // Select multiple dishes for dinner based on dinner preferences
+      const dinner = selectMultipleDishesByPreference(sortedCategories, dinnerPreferences, day, 'dinner');
 
       menus[dateStr] = {
         breakfast: { recipe: breakfast?.id, notes: '' },
-        lunch: { recipe: lunch?.id, notes: '' },
-        dinner: { recipe: dinner?.id, notes: '' },
+        lunch: { recipes: lunch, notes: '' },
+        dinner: { recipes: dinner, notes: '' },
         dayName: dayName
       };
     }
@@ -334,30 +351,25 @@ export default function Home() {
     setCurrentScreen('menu');
   };
 
-  const selectMealByPreference = (sortedCategories, day, mealType) => {
-    // Create a list of recipes respecting category preferences
-    const mealRecipes = [];
+  const selectMultipleDishesByPreference = (sortedCategories, preferences, day, mealType) => {
+    const selectedRecipes = [];
 
-    for (const [category, count] of Object.entries(categoryPreferences)) {
-      if (category === 'breakfast') continue; // Skip breakfast for lunch/dinner
+    // Iterate through each category in preferences
+    for (const [category, count] of Object.entries(preferences)) {
+      if (count <= 0) continue; // Skip if count is 0
 
       const recipes = sortedCategories[category] || [];
-      const offset = mealType === 'lunch' ? day : day + 100;
+      if (recipes.length === 0) continue;
 
-      for (let i = 0; i < count && i < recipes.length; i++) {
+      // Select 'count' dishes from this category for this day
+      for (let i = 0; i < count; i++) {
+        const offset = mealType === 'lunch' ? day * 100 : day * 200;
         const recipeIndex = (offset + i) % recipes.length;
-        mealRecipes.push(recipes[recipeIndex]);
+        selectedRecipes.push(recipes[recipeIndex].id);
       }
     }
 
-    // If no recipes found, return null
-    if (mealRecipes.length === 0) {
-      return null;
-    }
-
-    // Select recipe for this day
-    const recipeIndex = (day * 2 + (mealType === 'lunch' ? 0 : 1)) % mealRecipes.length;
-    return mealRecipes[recipeIndex];
+    return selectedRecipes.length > 0 ? selectedRecipes : [];
   };
 
   // ============================================
@@ -521,7 +533,6 @@ export default function Home() {
                 <small>{recipe.difficulty} • {recipe.cuisine}</small>
               </div>
 
-              {/* Issue #3 Fix: Add category reassignment dropdown for custom recipes */}
               {recipe.custom && (
                 <div style={styles.categorySelector}>
                   <label>Category:</label>
@@ -623,36 +634,61 @@ export default function Home() {
         <button onClick={() => setCurrentScreen('home')} style={styles.backButton}>{t('back')} Home</button>
         <h2>📅 {t('weeklyMenu')}</h2>
 
-        {/* Issue #6 Fix: Show all 5 category preferences instead of just 2 */}
-        <div style={styles.preferenceControl}>
-          <h3 style={{marginTop: 0}}>Recipe Preferences:</h3>
-          {Object.entries(categoryPreferences).filter(([cat]) => cat !== 'breakfast').map(([category, count]) => (
-            <label key={category} style={styles.preferenceLabel}>
-              {categoryDisplayNames[category]}:
-              <input
-                type="number"
-                min="0"
-                max="5"
-                value={count}
-                onChange={(e) => setCategoryPreferences({...categoryPreferences, [category]: Number(e.target.value)})}
-                style={styles.numberInput}
-              />
-            </label>
-          ))}
-          <button onClick={generateSmartMenu} style={styles.suggestButton}>{t('recommendedMenu')}</button>
+        {/* LUNCH PREFERENCES */}
+        <div style={styles.preferenceSection}>
+          <h3 style={{marginTop: 0}}>🍽️ Lunch Preferences:</h3>
+          <div style={styles.preferenceControl}>
+            {Object.entries(lunchPreferences).map(([category, count]) => (
+              <label key={category} style={styles.preferenceLabel}>
+                {categoryDisplayNames[category]}:
+                <input
+                  type="number"
+                  min="0"
+                  max="5"
+                  value={count}
+                  onChange={(e) => setLunchPreferences({...lunchPreferences, [category]: Number(e.target.value)})}
+                  style={styles.numberInput}
+                />
+              </label>
+            ))}
+          </div>
         </div>
 
+        {/* DINNER PREFERENCES */}
+        <div style={styles.preferenceSection}>
+          <h3>🌙 Dinner Preferences:</h3>
+          <div style={styles.preferenceControl}>
+            {Object.entries(dinnerPreferences).map(([category, count]) => (
+              <label key={category} style={styles.preferenceLabel}>
+                {categoryDisplayNames[category]}:
+                <input
+                  type="number"
+                  min="0"
+                  max="5"
+                  value={count}
+                  onChange={(e) => setDinnerPreferences({...dinnerPreferences, [category]: Number(e.target.value)})}
+                  style={styles.numberInput}
+                />
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <button onClick={generateSmartMenu} style={styles.suggestButton}>{t('recommendedMenu')}</button>
+
+        {/* WEEKLY MENU */}
         <div style={styles.weeklyMenuContainer}>
           {days.map((dateStr, dayIdx) => {
-            const dayMenu = weeklyMenu[dateStr] || { breakfast: {}, lunch: {}, dinner: {}, dayName: '' };
+            const dayMenu = weeklyMenu[dateStr] || { breakfast: {}, lunch: { recipes: [] }, dinner: { recipes: [] }, dayName: '' };
             const breakfastRecipe = dayMenu.breakfast?.recipe ? getRecipeById(dayMenu.breakfast.recipe) : null;
-            const lunchRecipe = dayMenu.lunch?.recipe ? getRecipeById(dayMenu.lunch.recipe) : null;
-            const dinnerRecipe = dayMenu.dinner?.recipe ? getRecipeById(dayMenu.dinner.recipe) : null;
+            const lunchRecipes = (dayMenu.lunch?.recipes || []).map(id => getRecipeById(id)).filter(r => r);
+            const dinnerRecipes = (dayMenu.dinner?.recipes || []).map(id => getRecipeById(id)).filter(r => r);
 
             return (
               <div key={dateStr} style={styles.dayCard}>
                 <h3 style={styles.dayTitle}>{formatDateDisplay(dateStr)}</h3>
 
+                {/* BREAKFAST */}
                 <div style={styles.mealSection}>
                   <strong>🌅 {t('morningMeal')}:</strong>
                   <select value={dayMenu.breakfast?.recipe || ''} onChange={(e) => setWeeklyMenu({...weeklyMenu, [dateStr]: {...dayMenu, breakfast: {...dayMenu.breakfast, recipe: Number(e.target.value) || null}}})} style={styles.select}>
@@ -660,29 +696,74 @@ export default function Home() {
                     {(recipeLibrary.breakfast || []).map(r => <option key={r.id} value={r.id}>{language === 'zh' ? r.zh : r.en}</option>)}
                     {Object.values(customRecipes).filter(r => r.category === 'breakfast').map(r => <option key={r.id} value={r.id}>{language === 'zh' ? r.zh : r.en}</option>)}
                   </select>
-                  {breakfastRecipe && <small>{breakfastRecipe.image} {language === 'zh' ? breakfastRecipe.zh : breakfastRecipe.en}</small>}
+                  {breakfastRecipe && <small style={styles.mealDisplayText}>{breakfastRecipe.image} {language === 'zh' ? breakfastRecipe.zh : breakfastRecipe.en}</small>}
                 </div>
 
+                {/* LUNCH - MULTIPLE DISHES */}
                 <div style={styles.mealSection}>
                   <strong>🍽️ {t('middayMeal')}:</strong>
-                  <select value={dayMenu.lunch?.recipe || ''} onChange={(e) => setWeeklyMenu({...weeklyMenu, [dateStr]: {...dayMenu, lunch: {...dayMenu.lunch, recipe: Number(e.target.value) || null}}})} style={styles.select}>
-                    <option value="">-- Select --</option>
-                    {[...(recipeLibrary.meatDishes || []), ...(recipeLibrary.vegetableDishes || []), ...(recipeLibrary.soupDishes || []), ...(recipeLibrary.specialtyDishes || [])].map(r => <option key={r.id} value={r.id}>{language === 'zh' ? r.zh : r.en}</option>)}
-                    {Object.values(customRecipes).filter(r => r.category !== 'breakfast').map(r => <option key={r.id} value={r.id}>{language === 'zh' ? r.zh : r.en}</option>)}
-                  </select>
-                  {lunchRecipe && <small style={styles.mealDisplayText}>{lunchRecipe.image} {language === 'zh' ? lunchRecipe.zh : lunchRecipe.en}</small>}
+                  <div style={styles.dishContainer}>
+                    {lunchRecipes.length > 0 ? (
+                      lunchRecipes.map((recipe, idx) => (
+                        <div key={idx} style={styles.dishItem}>
+                          <span style={styles.dishText}>{recipe.image} {language === 'zh' ? recipe.zh : recipe.en}</span>
+                          <select
+                            value={recipe.id}
+                            onChange={(e) => {
+                              const newRecipes = [...(dayMenu.lunch?.recipes || [])];
+                              newRecipes[idx] = Number(e.target.value);
+                              setWeeklyMenu({...weeklyMenu, [dateStr]: {...dayMenu, lunch: {...dayMenu.lunch, recipes: newRecipes}}});
+                            }}
+                            style={styles.miniSelect}
+                          >
+                            {[...(recipeLibrary.meatDishes || []), ...(recipeLibrary.vegetableDishes || []), ...(recipeLibrary.soupDishes || []), ...(recipeLibrary.specialtyDishes || [])].map(r => <option key={r.id} value={r.id}>{language === 'zh' ? r.zh : r.en}</option>)}
+                            {Object.values(customRecipes).filter(r => r.category !== 'breakfast').map(r => <option key={r.id} value={r.id}>{language === 'zh' ? r.zh : r.en}</option>)}
+                          </select>
+                          <button onClick={() => {
+                            const newRecipes = dayMenu.lunch?.recipes?.filter((_, i) => i !== idx) || [];
+                            setWeeklyMenu({...weeklyMenu, [dateStr]: {...dayMenu, lunch: {...dayMenu.lunch, recipes: newRecipes}}});
+                          }} style={styles.removeButton}>✕</button>
+                        </div>
+                      ))
+                    ) : (
+                      <small>No dishes selected</small>
+                    )}
+                  </div>
                 </div>
 
+                {/* DINNER - MULTIPLE DISHES */}
                 <div style={styles.mealSection}>
                   <strong>🌙 {t('eveningMeal')}:</strong>
-                  <select value={dayMenu.dinner?.recipe || ''} onChange={(e) => setWeeklyMenu({...weeklyMenu, [dateStr]: {...dayMenu, dinner: {...dayMenu.dinner, recipe: Number(e.target.value) || null}}})} style={styles.select}>
-                    <option value="">-- Select --</option>
-                    {[...(recipeLibrary.meatDishes || []), ...(recipeLibrary.vegetableDishes || []), ...(recipeLibrary.soupDishes || []), ...(recipeLibrary.specialtyDishes || [])].map(r => <option key={r.id} value={r.id}>{language === 'zh' ? r.zh : r.en}</option>)}
-                    {Object.values(customRecipes).filter(r => r.category !== 'breakfast').map(r => <option key={r.id} value={r.id}>{language === 'zh' ? r.zh : r.en}</option>)}
-                  </select>
-                  {dinnerRecipe && <small style={styles.mealDisplayText}>{dinnerRecipe.image} {language === 'zh' ? dinnerRecipe.zh : dinnerRecipe.en}</small>}
+                  <div style={styles.dishContainer}>
+                    {dinnerRecipes.length > 0 ? (
+                      dinnerRecipes.map((recipe, idx) => (
+                        <div key={idx} style={styles.dishItem}>
+                          <span style={styles.dishText}>{recipe.image} {language === 'zh' ? recipe.zh : recipe.en}</span>
+                          <select
+                            value={recipe.id}
+                            onChange={(e) => {
+                              const newRecipes = [...(dayMenu.dinner?.recipes || [])];
+                              newRecipes[idx] = Number(e.target.value);
+                              setWeeklyMenu({...weeklyMenu, [dateStr]: {...dayMenu, dinner: {...dayMenu.dinner, recipes: newRecipes}}});
+                            }}
+                            style={styles.miniSelect}
+                          >
+                            {[...(recipeLibrary.meatDishes || []), ...(recipeLibrary.vegetableDishes || []), ...(recipeLibrary.soupDishes || []), ...(recipeLibrary.specialtyDishes || [])].map(r => <option key={r.id} value={r.id}>{language === 'zh' ? r.zh : r.en}</option>)}
+                            {Object.values(customRecipes).filter(r => r.category !== 'breakfast').map(r => <option key={r.id} value={r.id}>{language === 'zh' ? r.zh : r.en}</option>)}
+                          </select>
+                          <button onClick={() => {
+                            const newRecipes = dayMenu.dinner?.recipes?.filter((_, i) => i !== idx) || [];
+                            setWeeklyMenu({...weeklyMenu, [dateStr]: {...dayMenu, dinner: {...dayMenu.dinner, recipes: newRecipes}}});
+                          }} style={styles.removeButton}>✕</button>
+                        </div>
+                      ))
+                    ) : (
+                      <small>No dishes selected</small>
+                    )}
+                  </div>
                 </div>
 
+                {/* NOTES */}
                 <div style={styles.notesSection}>
                   <label>{t('familyNotes')}:</label>
                   <textarea
@@ -710,7 +791,6 @@ export default function Home() {
           <div key={member.id} style={styles.memberCard}>
             <div style={styles.memberInfo}>
               <button onClick={() => editFamilyMemberAvatar(member.id, avatarOptions[(avatarOptions.indexOf(member.avatar) + 1) % avatarOptions.length])} style={styles.avatarButton}>{member.avatar}</button>
-              {/* Issue #1 Fix: Use key prop and stable callback to prevent keyboard dismissal */}
               <input
                 key={`name-${member.id}`}
                 type="text"
@@ -855,6 +935,13 @@ const styles = {
     border: '1px solid #ddd',
     borderRadius: '4px'
   },
+  miniSelect: {
+    flex: 1,
+    padding: '4px',
+    border: '1px solid #ddd',
+    borderRadius: '3px',
+    fontSize: '12px'
+  },
   numberInput: {
     width: '50px',
     padding: '5px',
@@ -971,6 +1058,36 @@ const styles = {
     marginBottom: '12px',
     fontSize: '15px'
   },
+  dishContainer: {
+    marginTop: '8px',
+    padding: '8px',
+    backgroundColor: '#ffffff',
+    border: '1px solid #e0e0e0',
+    borderRadius: '4px'
+  },
+  dishItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '8px',
+    backgroundColor: '#f5f5f5',
+    borderRadius: '4px',
+    marginBottom: '6px',
+    fontSize: '14px'
+  },
+  dishText: {
+    flex: 1,
+    fontWeight: 'bold'
+  },
+  removeButton: {
+    padding: '4px 8px',
+    backgroundColor: '#f44336',
+    color: 'white',
+    border: 'none',
+    borderRadius: '3px',
+    cursor: 'pointer',
+    fontSize: '12px'
+  },
   mealDisplayText: {
     fontSize: '15px',
     fontWeight: 'bold'
@@ -989,11 +1106,14 @@ const styles = {
     resize: 'vertical',
     fontSize: '13px'
   },
-  preferenceControl: {
+  preferenceSection: {
     padding: '15px',
     backgroundColor: '#f0f0f0',
     borderRadius: '4px',
     marginBottom: '15px',
+    border: '1px solid #ddd'
+  },
+  preferenceControl: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
     gap: '12px',
@@ -1006,14 +1126,16 @@ const styles = {
     gap: '8px'
   },
   suggestButton: {
-    padding: '10px 16px',
+    padding: '12px 24px',
     backgroundColor: '#4CAF50',
     color: 'white',
     border: 'none',
     borderRadius: '4px',
     cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: 'bold'
+    fontSize: '16px',
+    fontWeight: 'bold',
+    marginBottom: '20px',
+    width: '100%'
   },
   membersList: {
     display: 'grid',
