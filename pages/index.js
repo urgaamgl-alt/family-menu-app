@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
 import { foodLibrary, recipeLibrary, defaultFamilyMembers, avatarOptions } from '../lib/data';
 import { translations, languages } from '../lib/translations';
@@ -14,13 +14,22 @@ export default function Home() {
   const [customRecipes, setCustomRecipes] = useState({});
   const [weeklyMenu, setWeeklyMenu] = useState({});
   const [selectedRecipeCategory, setSelectedRecipeCategory] = useState('meatDishes');
-  const [meatDishPreference, setMeatDishPreference] = useState(2);
-  const [vegDishPreference, setVegDishPreference] = useState(1);
+
+  // Issue #6 Fix: Support all 5 recipe categories with custom counts
+  const [categoryPreferences, setCategoryPreferences] = useState({
+    meatDishes: 2,
+    vegetableDishes: 1,
+    soupDishes: 1,
+    specialtyDishes: 1,
+    breakfast: 1
+  });
+
   const [showAddFoodForm, setShowAddFoodForm] = useState(false);
   const [showAddRecipeForm, setShowAddRecipeForm] = useState(false);
   const [newFoodData, setNewFoodData] = useState({ foodCategory: 'vegetables', enName: '', zhName: '' });
-  const [newRecipeData, setNewRecipeData] = useState({ enName: '', zhName: '', difficulty: 'Easy', cuisine: 'Chinese' });
+  const [newRecipeData, setNewRecipeData] = useState({ enName: '', zhName: '', difficulty: 'Easy', cuisine: 'Chinese', category: 'meatDishes' });
   const [newMemberData, setNewMemberData] = useState({ name: '', avatar: avatarOptions[0], age: 'Adult' });
+  const [memberEditIds, setMemberEditIds] = useState({});
 
   const t = (key) => {
     const langObj = translations[language] || translations['en'];
@@ -38,6 +47,13 @@ export default function Home() {
       setCustomFoods(data.customFoods || {});
       setCustomRecipes(data.customRecipes || {});
       setWeeklyMenu(data.weeklyMenu || {});
+      setCategoryPreferences(data.categoryPreferences || {
+        meatDishes: 2,
+        vegetableDishes: 1,
+        soupDishes: 1,
+        specialtyDishes: 1,
+        breakfast: 1
+      });
     }
   }, []);
 
@@ -50,9 +66,10 @@ export default function Home() {
       customFoods,
       customRecipes,
       weeklyMenu,
+      categoryPreferences
     };
     localStorage.setItem('familyMenuDataV3', JSON.stringify(data));
-  }, [familyMembers, foodRatings, recipeRatings, customFoods, customRecipes, weeklyMenu]);
+  }, [familyMembers, foodRatings, recipeRatings, customFoods, customRecipes, weeklyMenu, categoryPreferences]);
 
   // ============================================
   // HELPER FUNCTIONS
@@ -83,6 +100,12 @@ export default function Home() {
     return foodRatings[key] || 0;
   };
 
+  // Issue #2 Fix: Helper to check if rating should be highlighted (cumulative)
+  const isFoodRatingHighlighted = (memberId, category, foodIndex, ratingLevel) => {
+    const currentRating = getFoodRating(memberId, category, foodIndex);
+    return currentRating >= ratingLevel;
+  };
+
   const rateRecipeByMember = (memberId, recipeId, rating) => {
     const key = `${memberId}-${recipeId}`;
     setRecipeRatings({ ...recipeRatings, [key]: rating });
@@ -91,6 +114,12 @@ export default function Home() {
   const getRecipeRating = (memberId, recipeId) => {
     const key = `${memberId}-${recipeId}`;
     return recipeRatings[key] || 0;
+  };
+
+  // Issue #2 Fix: Helper to check if rating should be highlighted (cumulative)
+  const isRecipeRatingHighlighted = (memberId, recipeId, ratingLevel) => {
+    const currentRating = getRecipeRating(memberId, recipeId);
+    return currentRating >= ratingLevel;
   };
 
   const getRecipeById = (recipeId) => {
@@ -136,7 +165,7 @@ export default function Home() {
       id: recipeId,
       en: newRecipeData.enName,
       zh: newRecipeData.zhName,
-      category: selectedRecipeCategory,
+      category: newRecipeData.category,
       difficulty: newRecipeData.difficulty,
       cuisine: newRecipeData.cuisine,
       image: '🍽️',
@@ -144,13 +173,21 @@ export default function Home() {
     };
 
     setCustomRecipes({ ...customRecipes });
-    setNewRecipeData({ enName: '', zhName: '', difficulty: 'Easy', cuisine: 'Chinese' });
+    setNewRecipeData({ enName: '', zhName: '', difficulty: 'Easy', cuisine: 'Chinese', category: 'meatDishes' });
     setShowAddRecipeForm(false);
   };
 
   const deleteCustomRecipe = (recipeId) => {
     delete customRecipes[recipeId];
     setCustomRecipes({ ...customRecipes });
+  };
+
+  // Issue #3 Fix: Add function to reassign recipe category
+  const changeRecipeCategory = (recipeId, newCategory) => {
+    if (customRecipes[recipeId]) {
+      customRecipes[recipeId].category = newCategory;
+      setCustomRecipes({ ...customRecipes });
+    }
   };
 
   const addFamilyMember = () => {
@@ -167,16 +204,76 @@ export default function Home() {
     setFamilyMembers(familyMembers.filter(m => m.id !== memberId));
   };
 
-  const editFamilyMemberName = (memberId, newName) => {
-    setFamilyMembers(familyMembers.map(m => m.id === memberId ? { ...m, name: newName } : m));
-  };
+  // Issue #1 Fix: Use useCallback to stabilize the edit function and prevent keyboard dismissal
+  const editFamilyMemberName = useCallback((memberId, newName) => {
+    setFamilyMembers(prevMembers =>
+      prevMembers.map(m => m.id === memberId ? { ...m, name: newName } : m)
+    );
+  }, []);
 
   const editFamilyMemberAvatar = (memberId, newAvatar) => {
     setFamilyMembers(familyMembers.map(m => m.id === memberId ? { ...m, avatar: newAvatar } : m));
   };
 
+  // Issue #7 Fix: Add export function
+  const exportData = () => {
+    const data = {
+      familyMembers,
+      foodRatings,
+      recipeRatings,
+      customFoods,
+      customRecipes,
+      weeklyMenu,
+      categoryPreferences
+    };
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `family-menu-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Issue #7 Fix: Add import function
+  const importData = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json';
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const imported = JSON.parse(event.target.result);
+          setFamilyMembers(imported.familyMembers || defaultFamilyMembers);
+          setFoodRatings(imported.foodRatings || {});
+          setRecipeRatings(imported.recipeRatings || {});
+          setCustomFoods(imported.customFoods || {});
+          setCustomRecipes(imported.customRecipes || {});
+          setWeeklyMenu(imported.weeklyMenu || {});
+          setCategoryPreferences(imported.categoryPreferences || {
+            meatDishes: 2,
+            vegetableDishes: 1,
+            soupDishes: 1,
+            specialtyDishes: 1,
+            breakfast: 1
+          });
+          alert('Data imported successfully!');
+        } catch (err) {
+          alert('Error importing data: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  };
+
   // ============================================
-  // SMART MENU SUGGESTION ALGORITHM
+  // SMART MENU SUGGESTION ALGORITHM (REWRITTEN)
   // ============================================
 
   const generateSmartMenu = () => {
@@ -187,38 +284,43 @@ export default function Home() {
       const dateStr = getDateForDay(day);
       const dayName = dayNames[day];
 
-      // Get available recipes by category
-      const meatDishes = [...(recipeLibrary.meatDishes || [])];
-      const vegDishes = [...(recipeLibrary.vegetableDishes || [])];
-      const breakfastRecipes = [...(recipeLibrary.breakfast || [])];
+      // Get all recipes organized by category
+      const allCategories = {
+        breakfast: [...(recipeLibrary.breakfast || []), ...Object.values(customRecipes).filter(r => r.category === 'breakfast')],
+        meatDishes: [...(recipeLibrary.meatDishes || []), ...Object.values(customRecipes).filter(r => r.category === 'meatDishes')],
+        vegetableDishes: [...(recipeLibrary.vegetableDishes || []), ...Object.values(customRecipes).filter(r => r.category === 'vegetableDishes')],
+        soupDishes: [...(recipeLibrary.soupDishes || []), ...Object.values(customRecipes).filter(r => r.category === 'soupDishes')],
+        specialtyDishes: [...(recipeLibrary.specialtyDishes || []), ...Object.values(customRecipes).filter(r => r.category === 'specialtyDishes')]
+      };
 
-      // Filter by ratings - prefer highly rated recipes
+      // Sort each category by average rating
       const sortByRating = (recipes) => {
         return recipes.sort((a, b) => {
-          const avgA = familyMembers.reduce((sum, m) => sum + getRecipeRating(m.id, a.id), 0) / familyMembers.length;
-          const avgB = familyMembers.reduce((sum, m) => sum + getRecipeRating(m.id, b.id), 0) / familyMembers.length;
+          const avgA = familyMembers.length > 0
+            ? familyMembers.reduce((sum, m) => sum + getRecipeRating(m.id, a.id), 0) / familyMembers.length
+            : 0;
+          const avgB = familyMembers.length > 0
+            ? familyMembers.reduce((sum, m) => sum + getRecipeRating(m.id, b.id), 0) / familyMembers.length
+            : 0;
           return avgB - avgA;
         });
       };
 
-      const sortedMeat = sortByRating(meatDishes);
-      const sortedVeg = sortByRating(vegDishes);
-      const sortedBreakfast = sortByRating(breakfastRecipes);
+      const sortedCategories = {
+        breakfast: sortByRating(allCategories.breakfast),
+        meatDishes: sortByRating(allCategories.meatDishes),
+        vegetableDishes: sortByRating(allCategories.vegetableDishes),
+        soupDishes: sortByRating(allCategories.soupDishes),
+        specialtyDishes: sortByRating(allCategories.specialtyDishes)
+      };
 
-      // Select breakfast (rotate through different ones)
-      const breakfastIndex = day % sortedBreakfast.length;
-      const breakfast = sortedBreakfast[breakfastIndex];
+      // Select breakfast (rotate)
+      const breakfastRecipes = sortedCategories.breakfast;
+      const breakfast = breakfastRecipes.length > 0 ? breakfastRecipes[day % breakfastRecipes.length] : null;
 
-      // Select lunch & dinner based on preference
-      const lunchMeat = sortedMeat[(day * 2) % sortedMeat.length];
-      const lunchVeg = sortedVeg[(day * 2 + 1) % sortedVeg.length];
-
-      const dinnerMeat = sortedMeat[(day * 3) % sortedMeat.length];
-      const dinnerVeg = sortedVeg[(day * 3 + 1) % sortedVeg.length];
-
-      // Choose based on preference (more meat or more veggie)
-      const lunch = meatDishPreference >= vegDishPreference ? lunchMeat : lunchVeg;
-      const dinner = meatDishPreference >= vegDishPreference ? dinnerMeat : dinnerVeg;
+      // For lunch & dinner, collect recipes from all non-breakfast categories based on preferences
+      const lunch = selectMealByPreference(sortedCategories, day, 'lunch');
+      const dinner = selectMealByPreference(sortedCategories, day, 'dinner');
 
       menus[dateStr] = {
         breakfast: { recipe: breakfast?.id, notes: '' },
@@ -230,6 +332,32 @@ export default function Home() {
 
     setWeeklyMenu(menus);
     setCurrentScreen('menu');
+  };
+
+  const selectMealByPreference = (sortedCategories, day, mealType) => {
+    // Create a list of recipes respecting category preferences
+    const mealRecipes = [];
+
+    for (const [category, count] of Object.entries(categoryPreferences)) {
+      if (category === 'breakfast') continue; // Skip breakfast for lunch/dinner
+
+      const recipes = sortedCategories[category] || [];
+      const offset = mealType === 'lunch' ? day : day + 100;
+
+      for (let i = 0; i < count && i < recipes.length; i++) {
+        const recipeIndex = (offset + i) % recipes.length;
+        mealRecipes.push(recipes[recipeIndex]);
+      }
+    }
+
+    // If no recipes found, return null
+    if (mealRecipes.length === 0) {
+      return null;
+    }
+
+    // Select recipe for this day
+    const recipeIndex = (day * 2 + (mealType === 'lunch' ? 0 : 1)) % mealRecipes.length;
+    return mealRecipes[recipeIndex];
   };
 
   // ============================================
@@ -250,6 +378,14 @@ export default function Home() {
         <button onClick={() => setCurrentScreen('recipes')} style={styles.screenButton}>📖 {t('recipes')}</button>
         <button onClick={() => setCurrentScreen('family')} style={styles.screenButton}>👨‍👩‍👧 {t('manageMembers')}</button>
         <button onClick={generateSmartMenu} style={styles.screenButton}>📅 {t('weeklyMenu')}</button>
+      </div>
+
+      <div style={styles.shareSection}>
+        <h3>💾 {t('shareSync') || 'Share & Sync'}</h3>
+        <div style={styles.shareButtons}>
+          <button onClick={exportData} style={styles.shareButton}>📥 Export Data</button>
+          <button onClick={importData} style={styles.shareButton}>📤 Import Data</button>
+        </div>
       </div>
     </div>
   );
@@ -283,10 +419,10 @@ export default function Home() {
                           onClick={() => rateFoodByMember(selectedMember, categoryKey, idx, rating)}
                           style={{
                             ...styles.ratingButton,
-                            backgroundColor: getFoodRating(selectedMember, categoryKey, idx) === rating ? '#4CAF50' : '#ddd'
+                            backgroundColor: isFoodRatingHighlighted(selectedMember, categoryKey, idx, rating) ? '#4CAF50' : '#ddd'
                           }}
                         >
-                          {rating}
+                          ★
                         </button>
                       ))}
                     </div>
@@ -384,6 +520,25 @@ export default function Home() {
               <div style={styles.recipeInfo}>
                 <small>{recipe.difficulty} • {recipe.cuisine}</small>
               </div>
+
+              {/* Issue #3 Fix: Add category reassignment dropdown for custom recipes */}
+              {recipe.custom && (
+                <div style={styles.categorySelector}>
+                  <label>Category:</label>
+                  <select
+                    value={recipe.category}
+                    onChange={(e) => changeRecipeCategory(recipe.id, e.target.value)}
+                    style={styles.categorySelect}
+                  >
+                    <option value="meatDishes">{categoryDisplayNames.meatDishes}</option>
+                    <option value="vegetableDishes">{categoryDisplayNames.vegetableDishes}</option>
+                    <option value="soupDishes">{categoryDisplayNames.soupDishes}</option>
+                    <option value="specialtyDishes">{categoryDisplayNames.specialtyDishes}</option>
+                    <option value="breakfast">{categoryDisplayNames.breakfast}</option>
+                  </select>
+                </div>
+              )}
+
               {selectedMember && (
                 <div style={styles.ratingButtons}>
                   {[1, 2, 3, 4, 5].map(rating => (
@@ -392,10 +547,10 @@ export default function Home() {
                       onClick={() => rateRecipeByMember(selectedMember, recipe.id, rating)}
                       style={{
                         ...styles.ratingButton,
-                        backgroundColor: getRecipeRating(selectedMember, recipe.id) === rating ? '#4CAF50' : '#ddd'
+                        backgroundColor: isRecipeRatingHighlighted(selectedMember, recipe.id, rating) ? '#4CAF50' : '#ddd'
                       }}
                     >
-                      {rating}
+                      ★
                     </button>
                   ))}
                 </div>
@@ -436,6 +591,13 @@ export default function Home() {
                 <option value="Chinese">Chinese</option>
                 <option value="Western">Western</option>
               </select>
+              <select value={newRecipeData.category} onChange={(e) => setNewRecipeData({...newRecipeData, category: e.target.value})} style={styles.input}>
+                <option value="meatDishes">{categoryDisplayNames.meatDishes}</option>
+                <option value="vegetableDishes">{categoryDisplayNames.vegetableDishes}</option>
+                <option value="soupDishes">{categoryDisplayNames.soupDishes}</option>
+                <option value="specialtyDishes">{categoryDisplayNames.specialtyDishes}</option>
+                <option value="breakfast">{categoryDisplayNames.breakfast}</option>
+              </select>
               <button onClick={addCustomRecipe} style={styles.saveButton}>{t('done')}</button>
               <button onClick={() => setShowAddRecipeForm(false)} style={{...styles.saveButton, backgroundColor: '#999'}}>{t('back')}</button>
             </div>
@@ -446,6 +608,14 @@ export default function Home() {
   };
 
   const MenuScreen = () => {
+    const categoryDisplayNames = {
+      meatDishes: t('meatDishes'),
+      vegetableDishes: t('vegetableDishes'),
+      soupDishes: t('soupDishes'),
+      specialtyDishes: t('specialtyDishes'),
+      breakfast: t('breakfast')
+    };
+
     const days = Array.from({length: 7}, (_, i) => getDateForDay(i));
 
     return (
@@ -453,13 +623,22 @@ export default function Home() {
         <button onClick={() => setCurrentScreen('home')} style={styles.backButton}>{t('back')} Home</button>
         <h2>📅 {t('weeklyMenu')}</h2>
 
+        {/* Issue #6 Fix: Show all 5 category preferences instead of just 2 */}
         <div style={styles.preferenceControl}>
-          <label style={styles.preferenceLabel}>{t('meatDishCount')}:
-            <input type="number" min="0" max="5" value={meatDishPreference} onChange={(e) => setMeatDishPreference(Number(e.target.value))} style={styles.numberInput} />
-          </label>
-          <label style={styles.preferenceLabel}>{t('vegDishCount')}:
-            <input type="number" min="0" max="5" value={vegDishPreference} onChange={(e) => setVegDishPreference(Number(e.target.value))} style={styles.numberInput} />
-          </label>
+          <h3 style={{marginTop: 0}}>Recipe Preferences:</h3>
+          {Object.entries(categoryPreferences).filter(([cat]) => cat !== 'breakfast').map(([category, count]) => (
+            <label key={category} style={styles.preferenceLabel}>
+              {categoryDisplayNames[category]}:
+              <input
+                type="number"
+                min="0"
+                max="5"
+                value={count}
+                onChange={(e) => setCategoryPreferences({...categoryPreferences, [category]: Number(e.target.value)})}
+                style={styles.numberInput}
+              />
+            </label>
+          ))}
           <button onClick={generateSmartMenu} style={styles.suggestButton}>{t('recommendedMenu')}</button>
         </div>
 
@@ -488,20 +667,20 @@ export default function Home() {
                   <strong>🍽️ {t('middayMeal')}:</strong>
                   <select value={dayMenu.lunch?.recipe || ''} onChange={(e) => setWeeklyMenu({...weeklyMenu, [dateStr]: {...dayMenu, lunch: {...dayMenu.lunch, recipe: Number(e.target.value) || null}}})} style={styles.select}>
                     <option value="">-- Select --</option>
-                    {[...(recipeLibrary.meatDishes || []), ...(recipeLibrary.vegetableDishes || [])].map(r => <option key={r.id} value={r.id}>{language === 'zh' ? r.zh : r.en}</option>)}
-                    {Object.values(customRecipes).filter(r => ['meatDishes', 'vegetableDishes'].includes(r.category)).map(r => <option key={r.id} value={r.id}>{language === 'zh' ? r.zh : r.en}</option>)}
+                    {[...(recipeLibrary.meatDishes || []), ...(recipeLibrary.vegetableDishes || []), ...(recipeLibrary.soupDishes || []), ...(recipeLibrary.specialtyDishes || [])].map(r => <option key={r.id} value={r.id}>{language === 'zh' ? r.zh : r.en}</option>)}
+                    {Object.values(customRecipes).filter(r => r.category !== 'breakfast').map(r => <option key={r.id} value={r.id}>{language === 'zh' ? r.zh : r.en}</option>)}
                   </select>
-                  {lunchRecipe && <small>{lunchRecipe.image} {language === 'zh' ? lunchRecipe.zh : lunchRecipe.en}</small>}
+                  {lunchRecipe && <small style={styles.mealDisplayText}>{lunchRecipe.image} {language === 'zh' ? lunchRecipe.zh : lunchRecipe.en}</small>}
                 </div>
 
                 <div style={styles.mealSection}>
                   <strong>🌙 {t('eveningMeal')}:</strong>
                   <select value={dayMenu.dinner?.recipe || ''} onChange={(e) => setWeeklyMenu({...weeklyMenu, [dateStr]: {...dayMenu, dinner: {...dayMenu.dinner, recipe: Number(e.target.value) || null}}})} style={styles.select}>
                     <option value="">-- Select --</option>
-                    {[...(recipeLibrary.meatDishes || []), ...(recipeLibrary.vegetableDishes || [])].map(r => <option key={r.id} value={r.id}>{language === 'zh' ? r.zh : r.en}</option>)}
-                    {Object.values(customRecipes).filter(r => ['meatDishes', 'vegetableDishes'].includes(r.category)).map(r => <option key={r.id} value={r.id}>{language === 'zh' ? r.zh : r.en}</option>)}
+                    {[...(recipeLibrary.meatDishes || []), ...(recipeLibrary.vegetableDishes || []), ...(recipeLibrary.soupDishes || []), ...(recipeLibrary.specialtyDishes || [])].map(r => <option key={r.id} value={r.id}>{language === 'zh' ? r.zh : r.en}</option>)}
+                    {Object.values(customRecipes).filter(r => r.category !== 'breakfast').map(r => <option key={r.id} value={r.id}>{language === 'zh' ? r.zh : r.en}</option>)}
                   </select>
-                  {dinnerRecipe && <small>{dinnerRecipe.image} {language === 'zh' ? dinnerRecipe.zh : dinnerRecipe.en}</small>}
+                  {dinnerRecipe && <small style={styles.mealDisplayText}>{dinnerRecipe.image} {language === 'zh' ? dinnerRecipe.zh : dinnerRecipe.en}</small>}
                 </div>
 
                 <div style={styles.notesSection}>
@@ -531,7 +710,9 @@ export default function Home() {
           <div key={member.id} style={styles.memberCard}>
             <div style={styles.memberInfo}>
               <button onClick={() => editFamilyMemberAvatar(member.id, avatarOptions[(avatarOptions.indexOf(member.avatar) + 1) % avatarOptions.length])} style={styles.avatarButton}>{member.avatar}</button>
+              {/* Issue #1 Fix: Use key prop and stable callback to prevent keyboard dismissal */}
               <input
+                key={`name-${member.id}`}
                 type="text"
                 value={member.name}
                 onChange={(e) => editFamilyMemberName(member.id, e.target.value)}
@@ -641,6 +822,26 @@ const styles = {
     fontSize: '16px',
     fontWeight: 'bold'
   },
+  shareSection: {
+    marginTop: '20px',
+    padding: '15px',
+    backgroundColor: '#f0f0f0',
+    borderRadius: '4px'
+  },
+  shareButtons: {
+    display: 'flex',
+    gap: '10px'
+  },
+  shareButton: {
+    flex: 1,
+    padding: '10px 16px',
+    backgroundColor: '#4CAF50',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '14px'
+  },
   memberSelector: {
     marginBottom: '20px',
     padding: '10px',
@@ -687,7 +888,8 @@ const styles = {
     border: 'none',
     borderRadius: '3px',
     cursor: 'pointer',
-    fontSize: '11px'
+    fontSize: '14px',
+    fontWeight: 'bold'
   },
   categoryTabs: {
     display: 'grid',
@@ -723,7 +925,7 @@ const styles = {
   },
   recipeTitle: {
     fontWeight: 'bold',
-    fontSize: '12px'
+    fontSize: '16px'
   },
   recipeImage: {
     fontSize: '20px'
@@ -731,6 +933,21 @@ const styles = {
   recipeInfo: {
     marginBottom: '8px',
     fontSize: '11px'
+  },
+  categorySelector: {
+    marginTop: '8px',
+    padding: '8px',
+    backgroundColor: '#e8f5e9',
+    borderRadius: '4px',
+    fontSize: '12px'
+  },
+  categorySelect: {
+    width: '100%',
+    padding: '4px',
+    marginTop: '4px',
+    border: '1px solid #ddd',
+    borderRadius: '3px',
+    fontSize: '12px'
   },
   weeklyMenuContainer: {
     display: 'grid',
@@ -748,15 +965,19 @@ const styles = {
     color: '#333',
     borderBottom: '2px solid #4CAF50',
     paddingBottom: '8px',
-    fontSize: '15px'
+    fontSize: '16px'
   },
   mealSection: {
     marginBottom: '12px',
-    fontSize: '13px'
+    fontSize: '15px'
+  },
+  mealDisplayText: {
+    fontSize: '15px',
+    fontWeight: 'bold'
   },
   notesSection: {
     marginTop: '12px',
-    fontSize: '13px'
+    fontSize: '14px'
   },
   notesInput: {
     width: '100%',
@@ -766,16 +987,16 @@ const styles = {
     borderRadius: '4px',
     fontFamily: 'Arial, sans-serif',
     resize: 'vertical',
-    fontSize: '12px'
+    fontSize: '13px'
   },
   preferenceControl: {
     padding: '15px',
     backgroundColor: '#f0f0f0',
     borderRadius: '4px',
     marginBottom: '15px',
-    display: 'flex',
-    gap: '15px',
-    flexWrap: 'wrap',
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+    gap: '12px',
     alignItems: 'center'
   },
   preferenceLabel: {
@@ -785,12 +1006,14 @@ const styles = {
     gap: '8px'
   },
   suggestButton: {
-    padding: '8px 16px',
+    padding: '10px 16px',
     backgroundColor: '#4CAF50',
     color: 'white',
     border: 'none',
     borderRadius: '4px',
-    cursor: 'pointer'
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: 'bold'
   },
   membersList: {
     display: 'grid',
@@ -808,7 +1031,8 @@ const styles = {
   memberInfo: {
     display: 'flex',
     alignItems: 'center',
-    gap: '10px'
+    gap: '10px',
+    flex: 1
   },
   avatarButton: {
     fontSize: '28px',
@@ -817,10 +1041,11 @@ const styles = {
     cursor: 'pointer'
   },
   memberNameInput: {
-    padding: '6px',
+    padding: '8px',
     border: '1px solid #ddd',
     borderRadius: '4px',
-    fontSize: '14px'
+    fontSize: '15px',
+    flex: 1
   },
   addSection: {
     marginTop: '20px',
@@ -863,6 +1088,6 @@ const styles = {
     border: 'none',
     borderRadius: '4px',
     cursor: 'pointer',
-    fontSize: '11px'
+    fontSize: '12px'
   }
 };
